@@ -1,6 +1,10 @@
 pipeline {
   agent any
 
+  options {
+    timeout(time: 30, unit: 'MINUTES')
+  }
+
   environment {
     AWS_REGION        = 'ap-south-1'
     REGISTRY          = '990851550012.dkr.ecr.ap-south-1.amazonaws.com'
@@ -60,7 +64,9 @@ pipeline {
 
     stage('Approval') {
       steps {
-        input message: 'Staging is healthy. Deploy to PRODUCTION?', ok: 'Deploy'
+        timeout(time: 10, unit: 'MINUTES') {
+          input message: 'Staging is healthy. Deploy to PRODUCTION?', ok: 'Deploy'
+        }
       }
     }
 
@@ -86,7 +92,7 @@ pipeline {
       dir('terraform') {
         sh '''
           for e in staging production; do
-            terraform workspace select $e && terraform destroy -auto-approve -input=false -var env=$e || true
+            terraform workspace select -or-create $e && terraform destroy -auto-approve -input=false -var env=$e || true
           done
         '''
       }

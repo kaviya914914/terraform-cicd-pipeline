@@ -6,8 +6,15 @@ REGION=ap-south-1
 REGISTRY=${IMAGE%%/*}
 SSH="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i $HOME/.ssh/cicd-key ubuntu@$IP"
 
-# wait until the server is up and Docker is ready
-until $SSH 'sudo docker info' >/dev/null 2>&1; do
+# wait until the server is up and Docker is ready (max ~5 minutes)
+for i in $(seq 1 30); do
+  if $SSH 'sudo docker info' >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    echo "server never became ready"
+    exit 1
+  fi
   echo "waiting for server..."
   sleep 10
 done
