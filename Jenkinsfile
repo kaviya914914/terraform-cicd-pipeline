@@ -2,9 +2,10 @@ pipeline {
   agent any
 
   environment {
-    AWS_REGION = 'ap-south-1'
-    REGISTRY   = '990851550012.dkr.ecr.ap-south-1.amazonaws.com'
-    IMAGE      = "${REGISTRY}/cicd-app:${BUILD_NUMBER}"
+    AWS_REGION        = 'ap-south-1'
+    REGISTRY          = '990851550012.dkr.ecr.ap-south-1.amazonaws.com'
+    IMAGE             = "${REGISTRY}/cicd-app:${BUILD_NUMBER}"
+    TF_VAR_my_ip_cidr = '122.167.101.53/32'
   }
 
   stages {
@@ -32,6 +33,36 @@ pipeline {
           aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
           docker push $IMAGE
         '''
+      }
+    }
+
+    stage('Staging: provision') {
+      steps {
+        dir('terraform') {
+          sh '''
+            terraform init -input=false
+            terraform workspace select -or-create staging
+            terraform apply -auto-approve -input=false -var env=staging
+          '''
+          script {
+            env.STG_IP = sh(script: 'terraform output -raw public_ip', returnStdout: true).trim()
+          }
+        }
+      }
+    }
+
+    stage('Staging: deploy + health check') {
+      steps {
+        sh './scripts/deploy.sh $STG_IP $IMAGE'
+        sh './scripts/health_check.sh $STG_IP'
+      }
+    }
+  }
+
+  post {
+    always {
+      dir('terraform') {
+        sh 'terraform workspace select staging && terraform destroy -auto-approve -input=false -var env=staging || true'
       }
     }
   }
