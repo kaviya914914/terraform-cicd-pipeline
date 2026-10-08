@@ -57,7 +57,7 @@ pipeline {
         sh './scripts/health_check.sh $STG_IP'
       }
     }
-  }
+
     stage('Approval') {
       steps {
         input message: 'Staging is healthy. Deploy to PRODUCTION?', ok: 'Deploy'
@@ -79,7 +79,9 @@ pipeline {
         sh './scripts/health_check.sh $PRD_IP'
       }
     }
-    post {
+  }
+
+  post {
     always {
       dir('terraform') {
         sh '''
@@ -88,8 +90,6 @@ pipeline {
           done
         '''
       }
-    }
-  }
     }
   }
 }
