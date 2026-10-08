@@ -58,12 +58,38 @@ pipeline {
       }
     }
   }
+    stage('Approval') {
+      steps {
+        input message: 'Staging is healthy. Deploy to PRODUCTION?', ok: 'Deploy'
+      }
+    }
 
-  post {
+    stage('Production: provision + deploy') {
+      steps {
+        dir('terraform') {
+          sh '''
+            terraform workspace select -or-create production
+            terraform apply -auto-approve -input=false -var env=production
+          '''
+          script {
+            env.PRD_IP = sh(script: 'terraform output -raw public_ip', returnStdout: true).trim()
+          }
+        }
+        sh './scripts/deploy.sh $PRD_IP $IMAGE'
+        sh './scripts/health_check.sh $PRD_IP'
+      }
+    }
+    post {
     always {
       dir('terraform') {
-        sh 'terraform workspace select staging && terraform destroy -auto-approve -input=false -var env=staging || true'
+        sh '''
+          for e in staging production; do
+            terraform workspace select $e && terraform destroy -auto-approve -input=false -var env=$e || true
+          done
+        '''
       }
+    }
+  }
     }
   }
 }
